@@ -281,7 +281,7 @@ UpdateTally(scoreHeuristic, x, y, z);
 
 在函数之间和逻辑组之间限制空白行。
 
-### 命名
+##命名
 
 在合理范围内，名称应该尽可能的描述详尽。遵循苹果命名规范 [Objective-C naming rules](https://developer.apple.com/library/content/documentation/Cocoa/Conceptual/CodingGuidelines/CodingGuidelines.html)。
 
@@ -446,4 +446,293 @@ NSEnumerator *enumerator = frogs.reverseObjectEnumerator;    // AVOID.
 ### 函数名
 
 通常情况下函数是复杂的。
+
+一般来说，函数应该从大写字母开始，每个新单词都有大写字母(又名`驼峰命名法`和`帕斯卡拼写法`)。
+
+```objective-c
+// GOOD:
+
+static void AddTableEntry(NSString *tableEntry);
+static BOOL DeleteFile(char *filename);
+```
+
+因为objective - c不提供命名空间，非静态函数应该有一个前缀，以最大程度减少冲突的机会。
+
+```objective-c
+// GOOD:
+
+extern NSTimeZone *GTMGetDefaultTimeZone();
+extern NSString *GTMGetURLScheme(NSURL *URL);
+```
+
+### 变量名
+
+变量名应该以小写字母开头，并使用驼峰格式。
+
+实例变量有突出显示。档案范围或全局变量有一个前缀`g`。比如，`myLocalVariable`, `_myInstanceVariable`, `gMyGlobalVariable`.
+
+#### 普通变量名
+
+读者应该能够根据名称推断出变量类型，但不要使用匈牙利命名法来表示语法属性，例如变量的静态类型(int或指针)。
+
+文件范围或全局变量(相对于常量)在方法或函数的范围之外声明是很少见的，应该有前缀`g`。
+
+```objective-c
+// GOOD:
+
+static int gGlobalCounter;
+```
+
+#### 实例变量
+
+实例变量应该混合大小写，并以下划线作为前缀，如 `_usernameTextField`。
+
+注意：谷歌之前的Objective-C实例变量规范提到的是后置下划线。现有的项目可能会选择继续使用新代码中的后置应该在每个类中维护前缀或后缀的一致性。下划线，以保持项目代码库中的一致性。
+
+#### 常量
+
+常量符号(const全局和静态变量和由# define创建的常量)应该使用驼峰格式分隔单词。
+
+常量应该有一个适当的前缀。
+
+```objective-c
+// GOOD:
+
+extern NSString *const GTLServiceErrorDomain;
+
+typedef NS_ENUM(NSInteger, GTLServiceError) {
+  GTLServiceErrorQueryResultMissing = -3000,
+  GTLServiceErrorWaitTimedOut       = -3001,
+};
+```
+
+因为objective - c不提供命名空间，所以外部链接的常量应该有一个前缀，可以将名称冲突的几率降到最低，通常是`ClassNameConstantName`或`ClassNameEnumName`。
+
+由于Swift代码的互操作性，枚举值应该具有扩展typedef名称的名称:
+
+```objective-c
+// GOOD:
+
+typedef NS_ENUM(NSInteger, DisplayTinge) {
+  DisplayTingeGreen = 1,
+  DisplayTingeBlue = 2,
+};
+```
+
+常量名应该以小写字母 `k` 开头
+
+```objective-c
+// GOOD:
+
+static const int kFileCount = 12;
+static NSString *const kUserKey = @"kUserKey";
+```
+
+##类型和声明
+
+### 局部变量
+
+在最实用的范围内来命名变量，并接近他们的用途。在其声明中初始化变量。
+
+```objective-c
+// GOOD:
+
+CLLocation *location = [self lastKnownLocation];
+for (int meters = 1; meters < 10; meters++) {
+  reportFrogsWithinRadius(location, meters);
+}
+```
+
+偶尔，为了提高效率，在使用范围外声明一个变量更合适。这个示例声明了与初始化不同的`meter`，并不需要在每次循环中发送`lastKnownLocation`消息：
+
+```objective-c
+// AVOID:
+
+int meters;                                         // AVOID.
+for (meters = 1; meters < 10; meters++) {
+  CLLocation *location = [self lastKnownLocation];  // AVOID.
+  reportFrogsWithinRadius(location, meters);
+}
+```
+
+在自动引用计数中，指向Objective-C对象的指针默认为`nil`，所以不需要对`nil`进行显式初始化
+
+### 无符号整数
+
+除了系统接口使用的匹配类型外，避免无符号整数。
+
+在使用无符号整数进行数学计算或计算为零时，会出现一些细微的错误。当在系统接口中匹配NSUInteger时，仅使用依赖于数学表达式中的有符号整数。
+
+```objective-c
+// GOOD:
+
+NSUInteger numberOfObjects = array.count;
+for (NSInteger counter = numberOfObjects - 1; counter > 0; --counter)
+```
+
+```objective-c
+// AVOID:
+
+for (NSUInteger counter = numberOfObjects - 1; counter > 0; --counter)  // AVOID.
+```
+
+无符号整数可以用于标记和位掩码，不过通常`NS_OPTIONS`或`NS_ENUM`会更合适。
+
+### 大小不一致的编码
+
+由于32位和64位构建的大小不同，避免使用`long`、`NSInteger`、`NSUInteger`和`CGFloat`，除非匹配系统接口。
+
+`long`、`NSInteger`、`NSUInteger`和`CGFloat`类型的大小在32 - 64位构建之间变化。在处理由系统接口公开的值时，使用这些类型是合适的，但是对于大多数其他计算都应该避免使用这些类型。
+
+```objective-c
+// GOOD:
+
+int32_t scalar1 = proto.intValue;
+
+int64_t scalar2 = proto.longValue;
+
+NSUInteger numberOfObjects = array.count;
+
+CGFloat offset = view.bounds.origin.x;
+```
+
+```objective-c
+// AVOID:
+
+NSInteger scalar2 = proto.longValue;  // AVOID.
+```
+
+文件和缓冲区大小通常超过32位限制，因此应该使用`int64_t`声明，而不是用`long`、`NSInteger`或`NSUInteger`。
+
+## 注释
+
+注释对于保持我们的代码可读非常重要。下面的规则给出了你应该做什么注释、在哪进行注释。记住：尽管注释很重要，但最好的代码应该自成文档。与其给类型及变量起一个晦涩难懂的名字，再为它写注释，不如直接起一个有意义的名字。
+
+注意标点、拼写和语法。比起写得不好的注释，阅读有好的注释要容易得多。
+
+注释应该像叙述文本一样可读，具有适当的大写和标点符号。在许多情况下，完整的句子比句子片段更具可读性。较短的注释，例如在一行代码末尾的注释，有时可以不那么正式，但是使用一致的样式。当你写注释时，为你的读者写:下一个需要理解你的代码的贡献者。慷慨一点——下一个可能就是你!
+
+### 文件注释
+
+每个文件的开头以文件内容的简要描述起始。每个文件可能包含以下事项:
+
+- 必要的话，加上许可证样板。为项目选择一个合适的授权样板
+- 如有必要，加上文件内容的简要描述
+
+如果你对其他人的原始代码作出重大的修改，那么考虑删除作者行，因为修订历史已经提供了更详细和更准确的作者身份记录。
+
+### 声明注释
+
+每一个重要的接口，共有和私有的，都应该伴有一个注释来描述它的目的以及它如何适应更大的图景。
+
+注释应该用于文档类、属性、实例变量、函数、类别、协议声明和枚举。
+
+```objective-c
+// GOOD:
+
+/**
+ * A delegate for NSApplication to handle notifications about app
+ * launch and shutdown. Owned by the main app controller.
+ */
+@interface MyAppDelegate : NSObject {
+  /**
+   * The background task in progress, if any. This is initialized
+   * to the value UIBackgroundTaskInvalid.
+   */
+  UIBackgroundTaskIdentifier _backgroundTaskID;
+}
+
+/** The factory that creates and manages fetchers for the app. */
+@property(nonatomic) GTMSessionFetcherService *fetcherService;
+
+@end
+```
+
+在使用Xcode解析格式化文档时，鼓励使用doxygenstyle风格注释接口。有各种各样的Doxygen命令;在项目中始终如一地使用它们。
+
+如果你已经在文件头部详细描述了接口，可以直接说明 “完整的描述请参见文件头部”，但是一定要有这部分注释。
+
+另外，每个方法都应该有注释来解释它的作用、参数、返回值、线程或队列假设以及其它影响。文档注释应该在公共方法的头文件中，或者在重要私有方法的前面。
+
+在为方法和函数注释时，使用描述性形式(`Opens the file`)而不是命令形式(`Open the file`)。注释只是为了描述函数而不是告诉函数做什么。
+
+为类的线程安全性，属性或方法作注释，如果有的话。如果一个类的实例可以被多个线程访问，那么要格外小心来记录多线程使用的规则和不变量。
+
+属性和实例变量的任何标记值，如`NULL`或`- 1`，都应该在注释中记录。
+
+ 声明注释解释了如何使用方法或函数。注释解释如何实现方法或函数的注释应该与实现而不是声明。
+
+### 实现注释
+
+提供注释解释复杂的、微妙的或复杂的代码段。
+
+```objective-c
+// GOOD:
+
+// Set the property to nil before invoking the completion handler to
+// avoid the risk of reentrancy leading to the callback being
+// invoked again.
+CompletionHandler handler = self.completionHandler;
+self.completionHandler = nil;
+handler();
+```
+
+当有用的时候，也提供关于被考虑或放弃的实现方法的注释。
+
+行尾注释应该与代码分开至少2个空格。如果您对后续行有几条注释，则通常可以更容易地将其对齐。
+
+```objective-c
+// GOOD:
+
+[self doSomethingWithALongName];  // Two spaces before the comment.
+[self doSomethingShort];          // More spacing to align the comment.
+```
+
+### 消除二义性符号
+
+在需要避免歧义的地方，使用倒引号或竖线在注释中引用变量名和符号比使用引号或将在行内命名符号更好。
+
+在Doxygen风格的注释中，偏向用一个单空间文本命令来划分符号，比如`@c`。
+
+当一个符号是一个常见的词，它可能会使句子看起来像它的构造很差时，界定有助于使它清晰。一个常见的例子是符号`count`:
+
+```objective-c
+// GOOD:
+
+// Sometimes `count` will be less than zero.
+```
+
+或者引用已经包含引号的内容时
+
+```objective-c
+// GOOD:
+
+// Remember to call `StringWithoutSpaces("foo bar baz")`
+```
+
+当一个符号是自显形的时候，不需要倒引号或竖线。
+
+```objective-c
+// GOOD:
+
+// This class serves as a delegate to GTMDepthCharge.
+```
+
+Doxygen格式也适用于识别符号。
+
+```objective-c
+// GOOD:
+
+/** @param maximum The highest value for @c count. */
+```
+
+###对象所有权
+
+对于没有被ARC管理的对象，当与 Objective-C 最常规的作法不同时，尽量使指针的所有权模型尽量明确。
+
+#### 手动引用计数
+
+继承自 `NSObject` 的对象的实例变量指针，通常被假定是强引用关系（retained），某些情况下也可以注释为弱引用（weak）或使用 `__weak` 生命周期限定符。
+
+Mac软件中的一个例外是标记为`@IBOutlets`,的实例变量，这些变量被假定为不被保留。
 
