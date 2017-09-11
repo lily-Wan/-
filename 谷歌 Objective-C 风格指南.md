@@ -734,5 +734,77 @@ Doxygen格式也适用于识别符号。
 
 继承自 `NSObject` 的对象的实例变量指针，通常被假定是强引用关系（retained），某些情况下也可以注释为弱引用（weak）或使用 `__weak` 生命周期限定符。
 
-Mac软件中的一个例外是标记为`@IBOutlets`,的实例变量，这些变量被假定为不被保留。
+Mac软件中的一个例外是标记为`@IBOutlets`的实例变量，这些变量被假定为不被保留。
+
+如果实例变量是指向`Core Foundation`、`c++`和其他非`objective - C`对象的指针，则应该始终用强而弱的注释声明它们，以指示哪些指针是，哪些不是保留的。核心基础和其他`非Objective-C`对象指针需要显式内存管理，即使在构建自动引用计数时也是如此。
+
+强引用及弱引用声明的例子：
+
+```objective-c
+// GOOD:
+
+@interface MyDelegate : NSObject
+
+@property(nonatomic) NSString *doohickey;
+@property(nonatomic, weak) NSString *parent;
+
+@end
+
+
+@implementation MyDelegate {
+  IBOutlet NSButton *_okButton;  // Normal NSControl; implicitly weak on Mac only
+
+  AnObjcObject *_doohickey;  // My doohickey
+  __weak MyObjcParent *_parent;  // To send messages back (owns this instance)
+
+  // non-NSObject pointers...
+  CWackyCPPClass *_wacky;  // Strong, some cross-platform object
+  CFDictionaryRef *_dict;  // Strong
+}
+@end
+```
+
+#### 自动引用计数
+
+对象所有权和生命周期在使用ARC时是显式的，因此不需要额外的注释来自动保留对象。
+
+## C 语言特性
+
+### 宏
+
+避免宏，特别是常量，枚举，XCode片段，或者C函数的地方。
+
+宏使您看到的代码与编译器看到的代码不同。现代C使常量和实用函数的传统用法变得没有必要。宏只能在没有其他可用的解决方案时使用。
+
+在需要宏的地方，使用一个惟一的名称来避免编译单元中符号碰撞的风险。如果实用，请保留在使用后未定义宏的范围。
+
+宏名称应该使用`shouty_snake_case` ——所有大写字母在单词之间加上下划线。函数类宏可以使用C函数命名操作。不要定义似乎是C或objective - C关键字的宏。
+
+```objective-c
+// GOOD:
+
+#define GTM_EXPERIMENTAL_BUILD ...      // GOOD
+
+// Assert unless X > Y
+#define GTM_ASSERT_GT(X, Y) ...         // GOOD, macro style.
+
+// Assert unless X > Y
+#define GTMAssertGreaterThan(X, Y) ...  // GOOD, function style.
+```
+
+```objective-c
+// AVOID:
+
+#define kIsExperimentalBuild ...        // AVOID
+
+#define unless(X) if(!(X))              // AVOID
+```
+
+避免宏扩展到使C或objective - C结构不平衡。避免引入范围的宏，或者可能模糊代码块中值的捕获。
+
+避免在header中生成类、属性或方法定义的宏作为公共API使用。这只会让代码难以理解，而语言已经有更好的方法来实现这一点。
+
+避免生成方法实现的宏，或者生成在宏之外使用的变量声明。宏不应该通过隐藏在何处以及如何声明变量来让代码难以理解。
+
+
 
