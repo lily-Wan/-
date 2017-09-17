@@ -806,5 +806,412 @@ Mac软件中的一个例外是标记为`@IBOutlets`的实例变量，这些变�
 
 避免生成方法实现的宏，或者生成在宏之外使用的变量声明。宏不应该通过隐藏在何处以及如何声明变量来让代码难以理解。
 
+```objective-c
+// AVOID:
 
+#define ARRAY_ADDER(CLASS) \
+  -(void)add ## CLASS ## :(CLASS *)obj toArray:(NSMutableArray *)array
 
+ARRAY_ADDER(NSString) {
+  if (array.count > 5) {              // AVOID -- where is 'array' defined?
+    ...
+  }
+}
+```
+
+断言和调试日志宏可以接受使用宏，这些宏是根据构建设置有条件地编译的，通常都没有编译成发布版本。
+
+### 非标准扩展
+
+C/Objective-C 的非标准扩展除非指定否则可能不会被使用。
+
+编译器支持不属于标准c语言的各种扩展，包括复合语句表达式 （例如: `foo = ({ int x; Bar(&x); x })` )和变长数组。
+
+`__attribute__`是一个被认可的异常，因为它在objective-API规范中被使用。
+
+条件运算符的二进制形式，`A ?: B`，是一个被认可的例外。
+
+## Cocoa 和 Objective-C 特性
+
+### 明确指定构造函数
+
+清楚地标识你的指定的初始化器。
+
+对于需要继承你的类的人来说，明确指定构造函数十分重要。这样他们就可以只重写一个构造函数（可能是几个）来保证他们的子类的构造函数会被调用。这也有助于将来别人调试你的类时，理解初始化代码的工作流程。使用注释或`NS_DESIGNATED_INITIALIZER` 宏来识别指定构造函数。如果你使用`NS_DESIGNATED_INITIALIZER`，用 `NS_UNAVAILABLE`来标记不支持的构造函数。
+
+### 重载指定构造函数
+
+当你写子类的时候，如果需要 `init…` 方法，确保重载父类的指定构造函数。
+
+如果你没有重载父类的指定构造函数，你的构造函数有时可能不会被调用，这会导致非常隐秘而且难以解决的 bug。
+
+### 重载 `NSObject` 的方法
+
+在 `@implementation` 的顶部重载 `NSObject` 类的方法。
+
+通常适用（但不局限）于 `init...`，`copyWithZone:`，以及 `dealloc` 方法。所有 `init...` 方法应该放在一起，其后是其他典型的 `NSObject`方法，比如`description` ，`isEqual:`，`hash`。
+
+可能在NSObject方法之前创建实例的便利类工厂方法。
+
+### 初始化
+
+不要在 `init` 方法中，将成员变量初始化为 `0` 或者 `nil`；毫无必要。
+
+刚分配的对象，默认值都是 0，除了 `isa` 指针。所以不要在初始化器里面写一堆将成员初始化为 `0` 或者 `nil` 的代码。
+
+### 头文件中的成员变量应该是`@protected`或`@private`
+
+成员变量通常应该在实现文件中声明，或者由属性自动生成。当在头文件中声明成员变量时，应该将其标记为`@protected`或`@private`。
+
+```objective-c
+// GOOD:
+
+@interface MyClass : NSObject {
+ @protected
+  id _myInstanceVariable;
+}
+@end
+```
+
+### 避免 `+new`
+
+不要调用 `NSObject` 类方法 `new`，也不要在子类中重载它。使用 `alloc` 和 `init`方法创建并初始化对象。
+
+现代的 Ojbective-C 代码通过调用 `alloc` 和 `init` 方法来创建并 retain 一个对象。由于类方法 `new` 很少使用，这使得有关内存分配的代码审查更困难。
+
+### 保持公共API尽量简单
+
+保持类简单；避免 “厨房水槽（kitchen-sink）” 式的 API。如果一个函数压根没必要公开，就把它放在公共接口之外。
+
+与 C++ 不同，Objective-C 没有方法来区分公共的方法和私有的方法；任何消息都会被发送到一个对象。因此，除非被类的用户使用，不要把这个方法放进公共 API 中。尽可能的避免了你你不希望被调用的方法却被调用到。这包括重载父类的方法。
+
+再次说明，“私有的” 方法其实不是私有的。你有时可能不小心重载了父类的私有方法，因而制造出很难查找的 Bug。通常，私有的方法应该有一个相当特殊的名字以防止子类无意地重载它们。
+
+### #import 和 #include 
+
+`#import` Ojbective-C/Objective-C++ 头文件，`#include` C/C++ 头文件。
+
+基于你所包括的头文件的编程语言，选择使用 `#import` 或是 `#include`。
+
+当包含一个使用 Objective-C、Objective-C++ 的头文件时，使用 `#import` 。当包含一个使用标准 C、C++ 头文件时，使用 `#include`。头文件应该使用 `#define` 保护。
+
+### includes的顺序
+
+头包的标准顺序是相关的头文件、操作系统头文件、语言库头文件，以及其他依赖项的头组。
+
+相关的头文件在其他的前面，以确保它没有隐藏的依赖项。对于实现文件，相关的头文件是头文件。对于测试文件，相关的头是包含测试接口的头文件。
+
+空白行可以分隔包含标题的逻辑上不同的组。
+
+使用项目源目录相关联的路径导入头文件。
+
+```objective-c
+// GOOD:
+
+#import "ProjectX/BazViewController.h"
+
+#import <Foundation/Foundation.h>
+
+#include <unistd.h>
+#include <vector>
+
+#include "base/basictypes.h"
+#include "base/integral_types.h"
+#include "util/math/mathutil.h"
+
+#import "ProjectX/BazModel.h"
+#import "Shared/Util/Foo.h"
+```
+
+### 为系统框架使用Umbrella Headers
+
+为系统框架和系统库导入 umbrella header ，而不是包含单独的文件。
+
+当你试图从框架（如 Cocoa 或者 Foundation）中包含若干零散的系统头文件时，实际上包含顶层根框架的话，编译器要做的工作更少。根框架通常已经经过预编译，加载更快。另外记得使用 `#import` 而不是 `#include` 来包含 Objective-C 的框架。
+
+```objective-c
+// GOOD:
+
+@import UIKit;     // GOOD.
+#import <Foundation/Foundation.h>     // GOOD.
+```
+
+```objective-c
+// AVOID:
+
+#import <Foundation/NSArray.h>        // AVOID.
+#import <Foundation/NSString.h>
+...
+```
+### `init` 和 `dealloc` 内避免使用访问器
+
+在 `init` 和 `dealloc` 方法执行的过程中，子类可能会处在一个不一致的状态，所以这些方法中的代码应避免调用 self 访问器。
+
+子类尚未初始化，或在 `init` 和 `dealloc` 方法执行时已经被销毁，会使访问器方法很可能不可靠。实际上，应在这些方法中直接对实例变量进行赋值或释放操作。
+
+```objective-c
+// GOOD:
+
+- (instancetype)init {
+  self = [super init];
+  if (self) {
+    _bar = 23;  // GOOD.
+  }
+  return self;
+}
+```
+
+```objective-c
+// AVOID:
+
+- (instancetype)init {
+  self = [super init];
+  if (self) {
+    self.bar = 23;  // AVOID.
+  }
+  return self;
+}
+```
+
+```objective-c
+
+- (void)dealloc {
+  [_notifier removeObserver:self];  // GOOD.
+}
+```
+
+```objective-c
+// AVOID:
+
+- (void)dealloc {
+  [self removeNotifications];  // AVOID.
+}
+```
+
+### setter 应复制 NSStrings
+
+使用`NSString`的setter应该总是复制它所接受的字符串。这通常也适用于`NSArray`和`NSDictionary`之类的集合。
+
+不要仅仅保留字符串，因为它可能是一个`NSMutableString`。这就避免了调用者在您不知情的情况下更改它。
+
+接收和保存集合对象的代码也应该考虑到传递的集合可能是可变的，因此集合可以更安全地作为原始副本的副本或可变副本被保存。
+
+```objective-c
+// GOOD:
+
+@property(nonatomic, copy) NSString *name;
+
+- (void)setZigfoos:(NSArray<Zigfoo *> *)zigfoos {
+  // Ensure that we're holding an immutable collection.
+  _zigfoos = [zigfoos copy];
+}
+```
+
+### 使用轻量级泛型来记录包含的类型
+
+所有在Xcode 7或更新版本上编译的项目都应该使用 Objective-C 轻量级泛型表示法来输入包含的对象。
+
+每个`NSArray`、`NSDictionary`或`NSSet`引用都应该使用轻量级泛型进行声明，以改进类型安全性，并显式地记录使用情况。
+
+```objective-c
+// GOOD:
+
+@property(nonatomic, copy) NSArray<Location *> *locations;
+@property(nonatomic, copy, readonly) NSSet<NSString *> *identifiers;
+
+NSMutableArray<MyLocation *> *mutableLocations = [otherObject.locations mutableCopy];
+```
+
+如果完全注释的类型变得复杂，请考虑使用类型定义来保持可读性。
+
+```objective-c
+// GOOD:
+
+typedef NSSet<NSDictionary<NSString *, NSDate *> *> TimeZoneMappingSet;
+TimeZoneMappingSet *timeZoneMappings = [TimeZoneMappingSet setWithObjects:...];
+```
+
+使用最具描述性的公共父类或协议。在最常见的情况下，当没有其他已知的情况时，将该集合声明为显式地使用id。
+
+```objective-c
+// GOOD:
+
+@property(nonatomic, copy) NSArray<id> *unknowns;
+```
+
+### 避免抛异常
+
+不要 `@throw` Objective-C 异常，同时也要时刻准备捕获从第三方或 OS 代码中抛出的异常。
+
+以下是在[Apple's Introduction to Exception Programming Topics for Cocoa](https://developer.apple.com/library/mac/documentation/Cocoa/Conceptual/Exceptions/Exceptions.html)时使用错误对象进行错误传递的建议。
+
+我们的确允许 `-fobjc-exceptions` 编译开关（主要因为我们要用到 `@synchronized`），但我们不使用 `@throw`。为了合理使用第三方的代码，`@try`、`@catch` 和 `@finally` 是允许的。如果你确实使用了异常，请明确注释你期望什么方法抛出异常。
+
+### `nil` 检查
+
+`nil` 检查只用在逻辑流程中。
+
+使用 `nil` 指针来检查应用程序的逻辑流程，而不是在发送消息时避免崩溃。将消息发送给 `nil` 确实返回作为一个指针，一个为0整数或浮点值，为 0 的结构体，`_Complex` 的值等于0 的`nil`。
+
+注意，这适用于 `nil` 作为消息目标，而不是作为参数值。个别方法可能或不能安全地处理 `nil` 参数值。
+
+注意，这和 C/C++ 中检查指针是否为 `NULL` 很不一样，C/C++ 运行时不做任何检查，从而导致应用程序崩溃。因此你仍然需要保证你不会使用一个 `NULL` 指针。
+
+### BOOL 若干陷阱
+
+将普通整形转换成 `BOOL` 时要小心。不要直接将 `BOOL` 值与 `YES` 进行比较。
+
+在OS X和32位的iOS版本中把 `BOOL` 定义成无符号 `char ` ，这意味着 `BOOL` 类型的值远不止 `YES` (1)或 ``NO``(0)。不要直接把整形转换成 `BOOL`。
+
+常见的错误包括将数组的大小、指针值及位运算的结果直接转换成 `BOOL` ，取决于整型结果的最后一个字节，很可能会产生一个 `NO` 值。当转换整形至 `BOOL` 时，使用三目操作符来返回 `YES` 或者 `NO`。
+
+你可以安全地在 `BOOL`、`_Bool` 以及 `bool` 之间转换（参见 C++ Std 4.7.4, 4.12 以及 C99 Std 6.3.1.2）。但 Objective-C 的方法标识符中，只使用 `BOOL`。
+
+对 `BOOL` 使用逻辑运算符（`&&`，`||` 和 `!`）是合法的，返回值也可以安全地转换成 `BOOL`，不需要使用三目操作符。
+
+```objective-c
+// AVOID:
+
+- (BOOL)isBold {
+  return [self fontTraits] & NSFontBoldTrait;  // AVOID.
+}
+- (BOOL)isValid {
+  return [self stringValue];  // AVOID.
+}
+```
+
+```objective-c
+// GOOD:
+
+- (BOOL)isBold {
+  return ([self fontTraits] & NSFontBoldTrait) ? YES : NO;
+}
+- (BOOL)isValid {
+  return [self stringValue] != nil;
+}
+- (BOOL)isEnabled {
+  return [self isValid] && [self isBold];
+}
+```
+
+同样，不要直接比较 `YES/NO` 和 `BOOL` 变量。在 C 中不仅仅因为影响可读性，更重要的是结果可能与你想的不同。
+
+```objective-c
+// AVOID:
+
+BOOL great = [foo isGreat];
+if (great == YES) {  // AVOID.
+  // ...be great!
+}
+```
+
+```objective-c
+// GOOD:
+
+BOOL great = [foo isGreat];
+if (great) {         // GOOD.
+  // ...be great!
+}
+```
+
+### 没有实例变量的接口
+
+没有声明任何实例变量的接口，应省略空花括号。
+
+```objective-c
+// GOOD:
+
+@interface MyClass : NSObject
+// Does a lot of stuff.
+- (void)fooBarBam;
+@end
+```
+
+```objective-c
+// AVOID:
+
+@interface MyClass : NSObject {
+}
+// Does a lot of stuff.
+- (void)fooBarBam;
+@end
+```
+
+## Cocoa 模式
+
+### 委托模式
+
+在创建循环引用时，不应保留委托、目标对象和块指针。
+
+为了避免引起循环引用，当一个委托或目标指针被清除时，就应该立即释放，这样就不再需要对对象进行消息传递了。
+
+如果没有明确的时间，委托或目标指针不再需要，指针只应该被弱引用。
+
+代码块指针不能被弱引用。为了避免在客户端代码中造成循环引用，代码块指针应该被用于回调，只有在它们被调用或者不再需要它们之后才可以显式地释放它们。否则，回调应该通过弱委托或目标指针来完成。
+
+## Objective-C++
+
+### 匹配语言的风格
+
+在一个 Objective-C++ 源文件中，遵循你正在实现的函数或方法的语言的风格。为了减少在混合使用 Cocoa/Objective-C++和C++时不同命名风格之间的冲突，请遵循所实现的方法的风格。
+
+对于 `@implementation`块中的代码，使用 Objective-C 命名规则。对于 C++ 类方法中的代码，使用C++命名规则。
+
+对于在类实现之外的 Objective-C++ 文件中的代码，在文件中保持一致。
+
+```objective-c
+// GOOD:
+
+// file: cross_platform_header.h
+
+class CrossPlatformAPI {
+ public:
+  ...
+  int DoSomethingPlatformSpecific();  // impl on each platform
+ private:
+  int an_instance_var_;
+};
+
+// file: mac_implementation.mm
+#include "cross_platform_header.h"
+
+// A typical Objective-C class, using Objective-C naming.
+@interface MyDelegate : NSObject {
+ @private
+  int _instanceVar;
+  CrossPlatformAPI* _backEndObject;
+}
+
+- (void)respondToSomething:(id)something;
+
+@end
+
+@implementation MyDelegate
+
+- (void)respondToSomething:(id)something {
+  // bridge from Cocoa through our C++ backend
+  _instanceVar = _backEndObject->DoSomethingPlatformSpecific();
+  NSString* tempString = [NSString stringWithFormat:@"%d", _instanceVar];
+  NSLog(@"%@", tempString);
+}
+
+@end
+
+// The platform-specific implementation of the C++ class, using
+// C++ naming.
+int CrossPlatformAPI::DoSomethingPlatformSpecific() {
+  NSString* temp_string = [NSString stringWithFormat:@"%d", an_instance_var_];
+  NSLog(@"%@", temp_string);
+  return [temp_string intValue];
+}
+```
+
+项目可能会选择使用 80 列的长度限制来与Google的C++风格指南保持一致。
+
+## Objective-C 风格异常
+
+### 显示风格异常
+
+没有期望遵循这些样式推荐的代码行，需要在行末尾添加 `// NOLINT` 或前一行的末尾添加 `// NOLINTNEXTLINE`。有时，Objective-C 部分代码必须忽略这些样式的建议(例如，代码可能是机器生成的，或者代码结构是不可能正确的风格)。
+
+某一行的`// NOLINT` 或前面一行 `// NOLINTNEXTLINE` 注释可以用来指示读者，代码是故意忽略样式的指导方针的。此外，这些注释还可以通过诸如 linters 和 handle code 之类的自动化工具来获得。注意，在 `//` 和 `NOLINT*` 之间有一个空格。
